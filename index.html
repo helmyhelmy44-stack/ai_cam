@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AI CAME">
 <title>AI CAME</title>
+<link rel="manifest" href="manifest.json">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -68,43 +69,25 @@
   </div>
 </div>
 <script>
-// ====== INLINE MANIFEST (PWA) ======
-const manifestObj={name:"AI CAME",short_name:"AI CAME",start_url:".",display:"standalone",background_color:"#0a1628",theme_color:"#0a1628",orientation:"portrait"};
-const manifestBlob=new Blob([JSON.stringify(manifestObj)],{type:"application/json"});
-const manifestURL=URL.createObjectURL(manifestBlob);
-const link=document.createElement("link");link.rel="manifest";link.href=manifestURL;document.head.appendChild(link);
-
-// ====== INLINE SERVICE WORKER ======
-const swCode=`self.addEventListener("install",e=>{self.skipWaiting()});self.addEventListener("activate",e=>{e.waitUntil(self.clients.claim())});self.addEventListener("fetch",e=>{e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)))});`;
-const swBlob=new Blob([swCode],{type:"application/javascript"});
-const swURL=URL.createObjectURL(swBlob);
-if("serviceWorker"in navigator)navigator.serviceWorker.register(swURL).catch(()=>{});
-
-// ====== CAMERA APP ======
 const video=document.getElementById("video"),btnCapture=document.getElementById("btn-capture"),btnSwitch=document.getElementById("btn-switch"),btnFlash=document.getElementById("btn-flash"),btnTimer=document.getElementById("btn-timer"),galleryStrip=document.getElementById("gallery-strip"),flashEl=document.getElementById("flash"),installBanner=document.getElementById("install-banner"),installBtn=document.getElementById("install-btn"),dismissInstall=document.getElementById("dismiss-install"),modeBtns=document.querySelectorAll(".mode-btn"),timerDisplay=document.createElement("div");timerDisplay.id="timer-display";document.body.appendChild(timerDisplay);
 let currentStream=null,facingMode="user",flashOn=false,timerSec=0,timerOptions=[0,3,5,10],mode="photo",mediaRecorder=null,recordedChunks=[],isRecording=false,gallery=JSON.parse(localStorage.getItem("camGallery")||"[]");
-
-async function startCamera(){if(currentStream){currentStream.getTracks().forEach(t=>t.stop())}try{const c={video:{facingMode,width:{ideal:1920},height:{ideal:1080}},audio:mode==="video"};currentStream=await navigator.mediaDevices.getUserMedia(c);video.srcObject=currentStream;video.classList.toggle("back",facingMode==="environment");const track=currentStream.getVideoTracks()[0];const caps=track.getCapabilities();if(caps.torch)track.applyConstraints({advanced:[{torch:flashOn}]})}catch(err){alert("مش قادر أفتح الكاميرا: "+err.message)}}
-
+async function startCamera(){if(currentStream){currentStream.getTracks().forEach(t=>t.stop())}try{const c={video:{facingMode,width:{ideal:1920},height:{ideal:1080}},audio:mode==="video"};currentStream=await navigator.mediaDevices.getUserMedia(c);video.srcObject=currentStream;video.classList.toggle("back",facingMode==="environment");const track=currentStream.getVideoTracks()[0];const caps=track.getCapabilities();if(caps.torch){track.applyConstraints({advanced:[{torch:flashOn}]})}}catch(err){alert("مش قادر أفتح الكاميرا: "+err.message)}}
 btnSwitch.addEventListener("click",()=>{facingMode=facingMode==="user"?"environment":"user";startCamera()});
 btnFlash.addEventListener("click",()=>{flashOn=!flashOn;btnFlash.style.opacity=flashOn?"1":"0.5";const track=currentStream?.getVideoTracks()[0];if(track){const caps=track.getCapabilities();if(caps.torch)track.applyConstraints({advanced:[{torch:flashOn}]})}});
 modeBtns.forEach(b=>{b.addEventListener("click",()=>{mode=b.dataset.mode;modeBtns.forEach(x=>x.classList.toggle("active",x===b));if(isRecording)stopRecord();startCamera()})});
 btnTimer.addEventListener("click",()=>{const idx=timerOptions.indexOf(timerSec);timerSec=timerOptions[(idx+1)%timerOptions.length];btnTimer.textContent=timerSec?timerSec+"s":"⏱️"});
 function runTimer(sec){return new Promise(resolve=>{if(!sec){resolve();return}let left=sec;timerDisplay.textContent=left;timerDisplay.classList.add("show");const iv=setInterval(()=>{left--;timerDisplay.textContent=left;if(left<=0){clearInterval(iv);timerDisplay.classList.remove("show");resolve()}},1000)})}
-
 btnCapture.addEventListener("click",async()=>{if(mode==="photo"){await runTimer(timerSec);flashEl.style.opacity="1";setTimeout(()=>flashEl.style.opacity="0",100);const c=document.createElement("canvas");c.width=video.videoWidth;c.height=video.videoHeight;const x=c.getContext("2d");if(facingMode==="user"){x.translate(c.width,0);x.scale(-1,1)}x.drawImage(video,0,0);saveToGallery(c.toDataURL("image/jpeg",0.92),"image")}else{if(!isRecording){await runTimer(timerSec);startRecord()}else{stopRecord()}}});
-
 function startRecord(){recordedChunks=[];mediaRecorder=new MediaRecorder(currentStream,{mimeType:"video/webm"});mediaRecorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data)};mediaRecorder.onstop=()=>{const blob=new Blob(recordedChunks,{type:"video/webm"});saveToGallery(URL.createObjectURL(blob),"video")};mediaRecorder.start();isRecording=true;btnCapture.classList.add("recording")}
 function stopRecord(){if(mediaRecorder&&mediaRecorder.state!=="inactive")mediaRecorder.stop();isRecording=false;btnCapture.classList.remove("recording")}
 function saveToGallery(url,type){gallery.unshift({url,type,date:Date.now()});if(gallery.length>50)gallery=gallery.slice(0,50);localStorage.setItem("camGallery",JSON.stringify(gallery));renderGallery()}
 function renderGallery(){galleryStrip.innerHTML="";gallery.slice(0,10).forEach(item=>{const el=document.createElement(item.type==="video"?"video":"img");el.className="thumb";el.src=item.url;if(item.type==="video"){el.muted=true;el.playsInline=true}el.addEventListener("click",()=>{const full=document.createElement("div");full.style.cssText="position:fixed;inset:0;background:#000;z-index:300;display:flex;align-items:center;justify-content:center;";const media=document.createElement(item.type==="video"?"video":"img");media.src=item.url;media.style.maxWidth="100%";media.style.maxHeight="100%";if(item.type==="video"){media.controls=true;media.autoplay=true}full.appendChild(media);const close=document.createElement("button");close.textContent="✕";close.style.cssText="position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.5);color:#fff;border:none;width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer;";close.onclick=()=>full.remove();full.appendChild(close);document.body.appendChild(full)});galleryStrip.appendChild(el)})}
 renderGallery();
-
 let deferredPrompt=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBanner.classList.add("show")});
 installBtn.addEventListener("click",async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==="accepted")installBanner.classList.remove("show");deferredPrompt=null});
 dismissInstall.addEventListener("click",()=>installBanner.classList.remove("show"));
-
+if("serviceWorker"in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{})}
 startCamera();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)startCamera()});
 </script>
